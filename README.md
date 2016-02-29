@@ -2,12 +2,15 @@
 Generating fakes for the P9 hunt.
 
 Based on the old supernova code for the PTF efficiencies.
-
+##Run
+```python
+python P9fakes.py inputlist 
+```
 ##Requirements
 
--Take an image
--Specify an Ra, Dec and magnitude
--Lay a fake down at that location and magnitude
+- Take an image
+- Specify an Ra, Dec and magnitude
+- Lay a fake down at that location and magnitude
 
 ##How to use the code
 
