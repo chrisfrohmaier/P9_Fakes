@@ -1,10 +1,10 @@
 import numpy as np
-import os, random, glob, shutil, time, subprocess, math
+import os, subprocess
 from astropy.io import fits
 from astropy import wcs
 import warnings
-#warnings.filterwarnings('ignore', category=UserWarning, append=True) #Ignores UserWarnings otherwise Astropy spits out loads when it overwrites files
-#warnings.filterwarnings('ignore', category=Warning, append=True)
+warnings.filterwarnings('ignore', category=UserWarning, append=True) #Ignores UserWarnings otherwise Astropy spits out loads when it overwrites files
+warnings.filterwarnings('ignore', category=Warning, append=True)
 from astropy.io.fits import getheader
 import sip_to_pv as s2p
 import sys
@@ -21,16 +21,14 @@ def file_structure(): #This definition creates the file structure for results to
 		os.makedirs('Results_V'+str(vnum)+'/Catalog')
 	if not os.path.exists('Results_V'+str(vnum)+'/Fake_Star_Catalog'):
 		os.makedirs('Results_V'+str(vnum)+'/Fake_Star_Catalog')
-	if not os.path.exists('Results_V'+str(vnum)+'/Fakes_added'):
-		os.makedirs('Results_V'+str(vnum)+'/Fakes_added')
-	if not os.path.exists('Results_V'+str(vnum)+'/Galaxies'):
-		os.makedirs('Results_V'+str(vnum)+'/Galaxies')
+	
+	
 
 def Sextract(in_image, w_image,zeropoint,seeing,saturation,gain): #Runs Sextractor and creates a catalog of all the stars
 	"""
 	Run SExtractor
 
-	Make sure you have the default.conv and default.nwm etc in this directory, or in the param file, specify the location of these files.
+	Make sure you have the default.conv and default.nwm etc in this directory, or give path in the param file to specify the location of these files.
 	"""
 
 	PTFname=in_image.split('/')[-1].split(".fits")[0]
@@ -83,12 +81,13 @@ def SelectBright(in_image): #Selected the top 20 brightest stars in the catalog
 def scaleStar(source, fmag, zpt): #def Scaling(science_image ,xcord, ycord, mag_array, flux_array, background_array, zpt, fake_stars, CCD_Num, magnitude_best,alpha_sky, delta_sky):
 	fakeFlux=10.0**((fmag-zpt)/(-2.5))
 	scaling_factor=((fakeFlux)/source[1])
-	print scaling_factor
-	return scaling_factor
+	return scaling_factor, fakeFlux
 
-def addFake(inimage,sourcearr, hostlessx, hostlessy, scale_fac):
+def addFake(inimage, oimage,sourcearr, hostlessx, hostlessy,fmag,fflux, scale_fac, head):
+	fakesRecord=open('Results_V'+str(vnum)+'/Fake_Star_Catalog/'+sys.argv[1].split('.')[0]+'_fakesAdded_V'+str(vnum)+'.dat','a')
+	PTFname=oimage.split('/')[-1].split(".fits")[0]
 	science_data=inimage[0].data
-	#---Old area to be scaled---
+	##---Old area to be scaled---
 	sourcex=sourcearr[3]
 	sourcey=sourcearr[4]
 	back=sourcearr[5]
@@ -96,8 +95,7 @@ def addFake(inimage,sourcearr, hostlessx, hostlessy, scale_fac):
 	starty=int(sourcey-10.0)
 	finx=int(sourcex+10.0)
 	finy=int(sourcey+10.0)
-
-	#---New area to have flux added---
+	##---New area to have flux added---
 	Nstartx=hostlessx-10.0
 	Nstarty=hostlessy-10.0
 	Nfinx=hostlessx+10.0
@@ -116,48 +114,69 @@ def addFake(inimage,sourcearr, hostlessx, hostlessy, scale_fac):
 	
 	inimage.flush()
 	inimage.close()
-global vnum
-vnum=int(sys.argv[2])
-file_structure()
+	"""Sourcex, Sourcey, a_source, dec_source, x_loc, y_loc, source_mag_auto, source_mag_best, flux_source, mag_fake, flux_fake, background, scaling_factor, PTFField, CCD, fbox1, fbox2, fbox3, fbox4, fbox5, fbox6, gain, readnoise, MOONILLF, MoonRA, MoonDec, AIRMASS, seeing, ELLIP, MEDSKY, SKYSIG), zeropoint, LMT_MG, MJD"""
+
+	fakesRecord.write(str(oimage)+' '+str(sourcearr[3])+' '+str(sourcearr[4])+' '+str(sourcearr[18])+' '+str(sourcearr[19])+' '+str(float(hostlessx))+' '+str(float(hostlessy))+' '+str(sourcearr[2])+' '+str(sourcearr[17])+' '+str(sourcearr[1])+' '+str(fmag)+' '+str(fflux)+' '+str(sourcearr[5])+' '+str(scale_fac)+' '+str(int(head[4]))+' '+str(head[5])+' '+str(fbox1)+' '+str(fbox2)+' '+str(fbox3)+' '+str(fbox4)+' '+str(fbox5)+' '+str(fbox6)+' '+str(head[3])+' '+str(head[6])+' '+str(head[7])+' '+str(head[14])+' '+str(head[15])+' '+str(head[8])+' '+str(head[1])+' '+str(head[9])+' '+str(head[10])+' '+str(head[11])+' '+str(head[0])+' '+str(head[12])+' '+str(head[13])+'\n')
+	
+
+
+
 image_list=np.genfromtxt(sys.argv[1], dtype=None)
 
+
 for i in range(len(image_list)):
+
 	oimage=image_list[i][0]
 	wimage=image_list[i][1]
 	Rafake=image_list[i][2]
 	Decfake=image_list[i][3]
 	fakemag=image_list[i][4]
-
+	global vnum
+	vnum=int(image_list[i][5])
+	file_structure()
 	fname=oimage.split('/')[-1].split(".fits")[0]+"_P9fakes_V"+str(vnum)+".fits"
-
-
+	PTFname=oimage.split('/')[-1].split(".fits")[0]
 	s2p.sip_to_pv(oimage,'Output_Images_V'+str(vnum)+'/'+fname, preserve=True)
-	print 'SIP Start'
 	hdulist_multi_sci=fits.open('Output_Images_V'+str(vnum)+'/'+fname, mode='update')
-	print 'SIP Finish'
-
 	w=wcs.WCS(hdulist_multi_sci[0].header)
-
-	#print oimage
-	print "---------"
-	print 'Ra, Dec (in): ', image_list[i][2],image_list[i][3]
 	x, y = w.all_world2pix(Rafake,Decfake,1)
-
-	print 'X, Y (in: ', (x,y) 
-
 	ra, dec= w.all_pix2world(x,y,0)
-
-	print 'Ra, Dec (out): ', (ra, dec)
-	print "---------"
-
+	"""Header Values"""
 	zeropoint=float(hdulist_multi_sci[0].header['UB1_ZP'])
 	seeing=float(hdulist_multi_sci[0].header['SEEING'])
 	saturation=55000.0 #float(hdulist_multi_sci[0].header['SATURATE'])
 	gain=float(hdulist_multi_sci[0].header['GAIN'])	
+	CCD_Num=float(hdulist_multi_sci[0].header['CCDID'])
+	PTFFIELD=int(hdulist_multi_sci[0].header['PTFFIELD'])
+	readnoise=float(hdulist_multi_sci[0].header['READNOI'])
+	MOONILLF=float(hdulist_multi_sci[0].header['MOONILLF'])
+	AIRMASS=float(hdulist_multi_sci[0].header['AIRMASS'])
+	ELLIP=(hdulist_multi_sci[0].header['ELLIP'])
+	if ELLIP=='NAN.0':
+		bad_images=open('Results_V'+str(vnum)+'/Bad_Images_V'+str(vnum)+'.dat','a')
+		bad_images.write(str(science_image[0])+str(science_image[1])+str('.fits')+' '+str('Reason: ELLIP has a NAN')+'\n')
+		bad_images.close()
+		#print science_image[0]+science_image[1], ' Has a NAN'
+		continue
+	else:
+		ELLIP=float(hdulist_multi_sci[0].header['ELLIP'])
+	MEDSKY=float(hdulist_multi_sci[0].header['MEDSKY'])
+	SKYSIG=float(hdulist_multi_sci[0].header['SKYSIG'])
+	LMT_MG=float(hdulist_multi_sci[0].header['LMT_MG'])
+	MJD=float(hdulist_multi_sci[0].header['OBSMJD'])
+	MoonRA=float(hdulist_multi_sci[0].header['MOONRA'])
+	MoonDec=float(hdulist_multi_sci[0].header['MOONDEC'])
+
+	head=[zeropoint, seeing, saturation, gain, CCD_Num, PTFFIELD, readnoise, MOONILLF,AIRMASS, ELLIP, MEDSKY, SKYSIG, LMT_MG, MJD, MoonRA, MoonDec]
+
 	Sextract(oimage, wimage,zeropoint,seeing,saturation,gain)	
 	catsize=Enough_Objects(oimage)
+	if catsize==False:
+		bad_images=open('Results_V'+str(vnum)+'/Bad_Images_V'+str(vnum)+'.dat','a')
+		bad_images.write(str(science_image[0])+str(science_image[1])+str('.fits')+' '+str('Reason: Sextractor did not detect enough objects (<300)')+'\n')
+		os.remove('Results_V'+str(vnum)+'/Catalog/'+science_image[1]+'_Catalog_V'+str(vnum)+'.cat')
+		continue
 	sourcestar=SelectBright(oimage)
-	sfactor=scaleStar(sourcestar, fakemag, zeropoint)
-	addFake(hdulist_multi_sci,sourcestar, int(round(x)), int(round(y)), sfactor)
-	print "Done"
+	sfactor, fflux=scaleStar(sourcestar, fakemag, zeropoint)
+	addFake(hdulist_multi_sci, oimage ,sourcestar, int(round(x)), int(round(y)),fakemag,fflux, sfactor, head)
 	
