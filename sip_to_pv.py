@@ -24,6 +24,7 @@ Funding is acknowledged from NASA to the NASA Herschel Science Center and the
 
 Contact: David Shupe, IPAC/Caltech.
 
+Changed the a, b, ap, bp orders to ints
 """
 
 version = 1.0
